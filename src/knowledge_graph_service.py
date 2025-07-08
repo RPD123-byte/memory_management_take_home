@@ -4,17 +4,15 @@ from typing import Dict, List, Optional, Tuple, Any, Set
 from datetime import datetime
 from termcolor import colored
 
-from neo4j_service import Neo4jService
+from base_knowledge_graph_service import BaseKnowledgeGraphService
 from models import RelationshipType, ToolResult, ToolSummary
-from token_counter import TokenCounter
-from llm_service import LLMService, Message
 from tool_summary_prompts import TOOL_SUMMARY_PROMPT
 
 
-class KnowledgeGraphService:
+class KnowledgeGraphService(BaseKnowledgeGraphService):
     """Service for managing tool results using a knowledge graph approach"""
     
-    def __init__(self, workflow_id: str, api_key: str = None):
+    def __init__(self, workflow_id: str, api_key: Optional[str] = None):
         """
         Initialize the knowledge graph service
         
@@ -22,94 +20,8 @@ class KnowledgeGraphService:
             workflow_id: Unique identifier for the workflow
             api_key: API key for LLM service
         """
-        self.workflow_id = workflow_id
-        self.neo4j_service = Neo4jService()
-        self.token_counter = TokenCounter()
-        self.llm_service = LLMService(api_key=api_key)
-        # Initialize tool counter based on existing tools in the graph
-        self.tool_counter = self._get_next_tool_counter()
-        
-    def _get_next_tool_counter(self) -> int:
-        """Get the next tool counter based on existing tools in the graph"""
-        try:
-            nodes = self.neo4j_service.get_all_nodes(self.workflow_id)
-            max_counter = 0
-            
-            for node in nodes:
-                if node["id"].startswith("tool_result_TR-"):
-                    # Extract counter from TR-X format
-                    tool_id = node["id"].replace("tool_result_", "")
-                    counter = int(tool_id.split("-")[1])
-                    max_counter = max(max_counter, counter)
-                    
-            return max_counter
-        except Exception as e:
-            print(colored(f"Warning: Could not determine next tool counter: {str(e)}", "yellow"))
-            return 0
-        
-    def close(self):
-        """Close Neo4j connection"""
-        self.neo4j_service.close()
-        
-    def add_tool_result(self, knowledge_entry: Dict[str, Any]) -> str:
-        """
-        Add a new tool result to the knowledge graph
-        
-        Args:
-            knowledge_entry: Tool execution entry from knowledge sequence
-            
-        Returns:
-            str: Tool ID (e.g., "TR-1")
-        """
-        self.tool_counter += 1
-        tool_id = f"TR-{self.tool_counter}"
-        
-        # Calculate token count for the result
-        result_text = json.dumps(knowledge_entry, indent=2)
-        token_count = self.token_counter.count_tokens(result_text)
-        
-        # Create tool result
-        tool_result = ToolResult(
-            tool_id=tool_id,
-            action_type=knowledge_entry.get("action_type", "unknown"),
-            action=knowledge_entry.get("action", {}),
-            result=knowledge_entry.get("result", {}),
-            timestamp=knowledge_entry.get("timestamp", datetime.now().isoformat()),
-            token_count=token_count,
-            status=knowledge_entry.get("result", {}).get("status", "unknown")
-        )
-        
-        # Store in Neo4j
-        self._store_tool_result(tool_result, result_text)
-        
-        print(colored(f"Added tool result {tool_id} with {token_count} tokens", "green"))
-        return tool_id
-        
-    def _store_tool_result(self, tool_result: ToolResult, content: str):
-        """Store tool result in Neo4j"""
-        # Create tool result node
-        metadata = f"tool_result_{tool_result.tool_id}"
-        summary = f"{tool_result.action_type}: {self._extract_brief_params(tool_result.action)} - {tool_result.status.upper()}"
-        
-        self.neo4j_service.update_node(
-            metadata=metadata,
-            summary=summary,
-            content=content,
-            workflow_id=self.workflow_id
-        )
-        
-    def _extract_brief_params(self, action: Dict[str, Any]) -> str:
-        """Extract brief parameter description from action"""
-        if isinstance(action, dict):
-            if "command" in action:
-                return action["command"]
-            elif "file_path" in action:
-                return action["file_path"]
-            elif "query" in action:
-                return action["query"]
-            elif "code" in action:
-                return f"code modification ({len(str(action['code']))} chars)"
-        return str(action)[:50] + "..." if len(str(action)) > 50 else str(action)
+        super().__init__(workflow_id, api_key)
+
         
     def generate_summary(self, tool_id: str) -> Optional[ToolSummary]:
         """
@@ -211,33 +123,7 @@ class KnowledgeGraphService:
             workflow_id=self.workflow_id
         )
         
-    def get_all_tool_results(self) -> List[ToolResult]:
-        """Get all tool results for display"""
-        tool_results = []
-        
-        # Get all tool result nodes
-        nodes = self.neo4j_service.get_all_nodes(self.workflow_id)
-        
-        for node in nodes:
-            if node["id"].startswith("tool_result_"):
-                tool_id = node["id"].replace("tool_result_", "")
-                content = json.loads(node["content"])
-                
-                tool_result = ToolResult(
-                    tool_id=tool_id,
-                    action_type=content.get("action_type", "unknown"),
-                    action=content.get("action", {}),
-                    result=content.get("result", {}),
-                    timestamp=content.get("timestamp", ""),
-                    token_count=self.token_counter.count_tokens(json.dumps(content)),
-                    status=content.get("result", {}).get("status", "unknown")
-                )
-                
-                tool_results.append(tool_result)
-                
-        # Sort by tool ID number
-        tool_results.sort(key=lambda x: int(x.tool_id.split("-")[1]))
-        return tool_results
+
         
     def compress_tool_results(self, tool_ids: List[str]) -> bool:
         """
@@ -308,117 +194,9 @@ class KnowledgeGraphService:
             print(colored(f"Error compressing tools: {str(e)}", "red"))
             return False
         
-    def retrieve_tool_result_with_salient_data(self, tool_id: str) -> Optional[str]:
-        """
-        Retrieve summary with salient data for a tool
-        
-        Args:
-            tool_id: Tool ID to retrieve
-            
-        Returns:
-            Formatted string with summary and salient data
-        """
-        try:
-            # Get summary node
-            summary_node = self.neo4j_service.get_node_by_metadata(
-                self.workflow_id,
-                f"summary_{tool_id}"
-            )
-            
-            if not summary_node:
-                return None
-                
-            summary_content = json.loads(summary_node["content"])
-            summary_text = summary_content.get("summary", "")
-            salient_data = summary_content.get("salient_data")
-            
-            # Format the result with salient data
-            if salient_data:
-                if isinstance(salient_data, dict) and salient_data:
-                    salient_parts = []
-                    for key, value in salient_data.items():
-                        if isinstance(value, str) and len(value) > 50:
-                            value = value[:50] + "..."
-                        salient_parts.append(f"{key}: {value}")
-                    return f"{summary_text} ({', '.join(salient_parts)})"
-                    
-                elif isinstance(salient_data, str) and salient_data.strip():
-                    return f"{summary_text} ({salient_data})"
-                        
-                elif isinstance(salient_data, list) and salient_data:
-                    return f"{summary_text} ({', '.join(str(item) for item in salient_data)})"
-            
-            return summary_text
-                
-        except Exception as e:
-            print(colored(f"Error retrieving summary with salient data for {tool_id}: {str(e)}", "red"))
-            return None
-            
-    def retrieve_tool_result(self, tool_id: str, summary: bool = False) -> Optional[str]:
-        """
-        Retrieve full tool result or summary
-        
-        Args:
-            tool_id: Tool ID to retrieve
-            summary: If True, return summary instead of full result
-            
-        Returns:
-            Formatted tool result or None if not found
-        """
-        try:
-            if summary:
-                # Get summary
-                summary_node = self.neo4j_service.get_node_by_metadata(
-                    self.workflow_id,
-                    f"summary_{tool_id}"
-                )
-                
-                if summary_node:
-                    summary_content = json.loads(summary_node["content"])
-                    return summary_content["summary"]
-                else:
-                    return f"Summary not available for {tool_id}"
-                    
-            else:
-                # Get full result
-                tool_node = self.neo4j_service.get_node_by_metadata(
-                    self.workflow_id,
-                    f"tool_result_{tool_id}"
-                )
-                
-                if tool_node:
-                    tool_content = json.loads(tool_node["content"])
-                    return self._format_full_tool_result(tool_id, tool_content)
-                else:
-                    return f"Tool result not found for {tool_id}"
-                    
-        except Exception as e:
-            print(colored(f"Error retrieving tool result {tool_id}: {str(e)}", "red"))
-            return f"Error retrieving {tool_id}: {str(e)}"
-            
-    def _format_full_tool_result(self, tool_id: str, content: Dict[str, Any]) -> str:
-        """Format full tool result for display"""
-        action = content.get("action", {})
-        result = content.get("result", {})
-        
-        lines = [
-            f"[{tool_id}] {content.get('action_type', 'unknown')}:",
-            f"Input: {json.dumps(action, indent=2)}",
-            f"Result: {result.get('status', 'unknown')}",
-            f"Output: {result.get('output', 'None')}",
-            f"Error: {result.get('error', 'None')}"
-        ]
-        
-        return "\n".join(lines)
-        
-    def reset_workflow(self):
-        """Reset all data for this workflow"""
-        self.neo4j_service.reset_graph_by_workflow(self.workflow_id)
-        self.tool_counter = 0
-        print(colored(f"Reset workflow {self.workflow_id}", "yellow"))
-        
-    def generate_dashboard(self, compressed_tool_groups: Dict[str, Dict[str, Any]] = None,
-                          expanded_tools: Set[str] = None) -> str:
+
+    def generate_dashboard(self, compressed_tool_groups: Optional[Dict[str, Dict[str, Any]]] = None,
+                          expanded_tools: Optional[Set[str]] = None) -> str:
         """
         Generate tool dashboard with compression/expansion state
         
@@ -481,9 +259,15 @@ class KnowledgeGraphService:
             lines.append("")  # Add spacing between tools
             total_tokens += tool.token_count
         
-        # Add token usage summary
-        max_tokens = 100000
-        usage_percent = (total_tokens / max_tokens) * 100
-        lines.append(f"Token Usage: {total_tokens:,} / {max_tokens:,} ({usage_percent:.1f}%)")
+        # Calculate dashboard token count
+        dashboard_content = "\n".join(lines)
+        dashboard_tokens = self.token_counter.count_tokens(dashboard_content)
+
+        # Print comparison info
+        print(f"\n ORIGINAL SERVICE STATS:")
+        print(f"   Original: {total_tokens:,} tokens")
+        print(f"   Dashboard: {dashboard_tokens:,} tokens")
+        print(f"   Compression: {dashboard_tokens/total_tokens*100:.1f}%")
+        print(f"   Saved: {total_tokens - dashboard_tokens:,} tokens")
         
-        return "\n".join(lines) 
+        return dashboard_content 

@@ -6,15 +6,15 @@ from datetime import datetime
 from termcolor import colored
 
 from neo4j_service import Neo4jService
-from models import RelationshipType, ToolResult, ToolSummary
+from models import ToolResult, ToolSummary
 from token_counter import TokenCounter
-from llm_service import LLMService, Message
+from llm_service import LLMService
 
 
 class BaseKnowledgeGraphService(ABC):
     """Abstract base class for knowledge graph services"""
     
-    def __init__(self, workflow_id: str, api_key: Optional[str] = None, max_tokens: int = 100000):
+    def __init__(self, workflow_id: str, llm_service: LLMService, max_tokens: int = 100000):
         """
         Initialize the base knowledge graph service
         
@@ -26,7 +26,7 @@ class BaseKnowledgeGraphService(ABC):
         self.workflow_id = workflow_id
         self.neo4j_service = Neo4jService()
         self.token_counter = TokenCounter()
-        self.llm_service = LLMService(api_key=api_key if api_key is not None else "")   
+        self.llm_service = llm_service
         self.max_tokens = max_tokens
         
         # Initialize tool counter based on existing tools in the graph
@@ -240,6 +240,10 @@ class BaseKnowledgeGraphService(ABC):
         result_text = json.dumps(knowledge_entry, indent=2)
         token_count = self.token_counter.count_tokens(result_text)
         
+        # Create a copy of knowledge_entry and add token_count to it
+        content_with_token_count = knowledge_entry.copy()
+        content_with_token_count['token_count'] = token_count
+        
         # Create tool result
         tool_result = ToolResult(
             tool_id=tool_id,
@@ -252,7 +256,8 @@ class BaseKnowledgeGraphService(ABC):
         )
         
         # Store in Neo4j
-        self._store_tool_result(tool_result, result_text)
+        content_json = json.dumps(content_with_token_count, indent=2)
+        self._store_tool_result(tool_result, content_json)
         
         print(colored(f"Added tool result {tool_id} with {token_count} tokens", "green"))
         return tool_id
@@ -297,3 +302,18 @@ class BaseKnowledgeGraphService(ABC):
             str: Formatted tool dashboard
         """
         pass 
+
+    @abstractmethod
+    def generate_tool_strings_for_dashboard(self, compressed_tool_groups: Optional[Dict[str, Dict[str, Any]]] = None,
+                          expanded_tools: Optional[Set[str]] = None) -> List[str]:
+        """
+        Generate tool strings for dashboard
+        
+        Args:
+            compressed_tool_groups: Dict mapping group_id -> {tool_ids, summary, timestamp}
+            expanded_tools: Set of tool IDs that should show expanded details
+            
+        Returns:
+            List[str]: List of string representations of tool results for dashboard
+        """
+        pass

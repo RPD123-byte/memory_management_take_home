@@ -1,3 +1,4 @@
+# ------- your original stack -------
 neo4j==5.24.0
 openai
 google-generativeai==0.8.3
@@ -7,6 +8,10 @@ python-dotenv==1.0.1
 tiktoken==0.8.0
 pytest==8.3.3
 pytest-asyncio==0.24.0
-asyncio==3.4.3
 langchain-openai
 langsmith
+sentence-transformers
+
+bert-score
+transformers
+matplotlib

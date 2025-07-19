@@ -61,7 +61,7 @@ class SummaryCompressor(ToolCompressor):
         self.llm_service = llm_service
     
     def get_compression_type(self) -> str:
-        return "brief"
+        return "summary"
     
     def compress_and_store(self, tool_id: str, tool_content: Dict[str, Any], 
                           pre_generated_summary: Optional[Dict[str, Any]] = None) -> bool:
@@ -155,7 +155,7 @@ class CompressorRegistry:
         
         self.compressors = {
             "ultra_compact": UltraCompressor(neo4j_service, token_counter, workflow_id, llm_service),
-            "brief": SummaryCompressor(neo4j_service, token_counter, workflow_id, llm_service),
+            "summary": SummaryCompressor(neo4j_service, token_counter, workflow_id, llm_service),
             "detailed": DetailedCompressor(neo4j_service, token_counter, workflow_id)
         }
     

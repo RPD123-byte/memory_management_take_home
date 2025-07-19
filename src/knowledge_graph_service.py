@@ -7,20 +7,21 @@ from termcolor import colored
 from base_knowledge_graph_service import BaseKnowledgeGraphService
 from models import RelationshipType, ToolResult, ToolSummary
 from tool_summary_prompts import TOOL_SUMMARY_PROMPT
+from llm_service import LLMService
 
 
 class KnowledgeGraphService(BaseKnowledgeGraphService):
     """Service for managing tool results using a knowledge graph approach"""
     
-    def __init__(self, workflow_id: str, api_key: Optional[str] = None):
+    def __init__(self, workflow_id: str, llm_service: LLMService):
         """
         Initialize the knowledge graph service
         
         Args:
             workflow_id: Unique identifier for the workflow
-            api_key: API key for LLM service
+            llm_service: LLM service to generate
         """
-        super().__init__(workflow_id, api_key)
+        super().__init__(workflow_id, llm_service)
 
         
     def generate_summary(self, tool_id: str) -> Optional[ToolSummary]:
@@ -195,6 +196,61 @@ class KnowledgeGraphService(BaseKnowledgeGraphService):
             return False
         
 
+    def generate_tool_strings_for_dashboard(self, compressed_tool_groups: Optional[Dict[str, Dict[str, Any]]] = None,
+                          expanded_tools: Optional[Set[str]] = None) -> List[str]:
+        if compressed_tool_groups is None:
+            compressed_tool_groups = {}
+        if expanded_tools is None:
+            expanded_tools = set()
+        
+        # Get all tool results
+        tool_results = self.get_all_tool_results()
+        
+        if not tool_results:
+            return [];
+        
+        # Build a set of all compressed tool IDs for quick lookup
+        compressed_tool_ids = set()
+        for group_info in compressed_tool_groups.values():
+            compressed_tool_ids.update(group_info.get("tool_ids", []))
+        
+        # Generate dashboard
+        tools_str = []
+        
+        for tool in tool_results:
+            tool_id = tool.tool_id
+            
+            tool_str = ""
+            # Check if this tool is compressed
+            if tool_id in compressed_tool_ids and tool_id not in expanded_tools:
+                # Show compressed version
+                summary_with_data = self.retrieve_tool_result_with_salient_data(tool_id)
+                if summary_with_data:
+                    tool_str = f"[{tool_id}] {summary_with_data} [COMPRESSED]"
+                else:
+                    summary = self.retrieve_tool_result(tool_id, summary=True)
+                    tool_str = f"[{tool_id}] {summary} [COMPRESSED]"
+            else:
+                # Show full expanded view
+                status = tool.status.upper()
+                warning = " ⚠️" if tool.status == "error" or tool.token_count > 5000 else ""
+                
+                tool_str = f"[{tool_id}] {tool.action_type} - {status} ({tool.token_count:,} tokens){warning}\n"
+                tool_str += f"Input: {json.dumps(tool.action)}\n"
+                tool_str += f"Result: {status.lower()}\n"
+                
+                output = tool.result.get("output", "")
+                if output:
+                    tool_str += f"Output: {output}\n"
+                
+                error = tool.result.get("error", "")
+                if error:
+                    tool_str += f"Error: {error}\n"
+            
+            tools_str.append(tool_str)
+
+        return tools_str;
+    
     def generate_dashboard(self, compressed_tool_groups: Optional[Dict[str, Dict[str, Any]]] = None,
                           expanded_tools: Optional[Set[str]] = None) -> str:
         """
@@ -207,10 +263,6 @@ class KnowledgeGraphService(BaseKnowledgeGraphService):
         Returns:
             str: Formatted tool dashboard
         """
-        if compressed_tool_groups is None:
-            compressed_tool_groups = {}
-        if expanded_tools is None:
-            expanded_tools = set()
         
         # Get all tool results
         tool_results = self.get_all_tool_results()
@@ -218,46 +270,11 @@ class KnowledgeGraphService(BaseKnowledgeGraphService):
         if not tool_results:
             return "=== ACTIVE TOOL RESULTS ===\nNo tool results yet."
         
-        # Build a set of all compressed tool IDs for quick lookup
-        compressed_tool_ids = set()
-        for group_info in compressed_tool_groups.values():
-            compressed_tool_ids.update(group_info.get("tool_ids", []))
-        
         # Generate dashboard
         lines = ["=== ACTIVE TOOL RESULTS ==="]
-        total_tokens = 0
-        
-        for tool in tool_results:
-            tool_id = tool.tool_id
-            
-            # Check if this tool is compressed
-            if tool_id in compressed_tool_ids and tool_id not in expanded_tools:
-                # Show compressed version
-                summary_with_data = self.retrieve_tool_result_with_salient_data(tool_id)
-                if summary_with_data:
-                    lines.append(f"[{tool_id}] {summary_with_data} [COMPRESSED]")
-                else:
-                    summary = self.retrieve_tool_result(tool_id, summary=True)
-                    lines.append(f"[{tool_id}] {summary} [COMPRESSED]")
-            else:
-                # Show full expanded view
-                status = tool.status.upper()
-                warning = " ⚠️" if tool.status == "error" or tool.token_count > 5000 else ""
-                
-                lines.append(f"[{tool_id}] {tool.action_type} - {status} ({tool.token_count:,} tokens){warning}")
-                lines.append(f"Input: {json.dumps(tool.action)}")
-                lines.append(f"Result: {status.lower()}")
-                
-                output = tool.result.get("output", "")
-                if output:
-                    lines.append(f"Output: {output}")
-                
-                error = tool.result.get("error", "")
-                if error:
-                    lines.append(f"Error: {error}")
-            
-            lines.append("")  # Add spacing between tools
-            total_tokens += tool.token_count
+        tools_str = self.generate_tool_strings_for_dashboard(compressed_tool_groups, expanded_tools)
+        lines.extend(tools_str)
+        total_tokens = sum([tool.token_count for tool in tool_results])
         
         # Calculate dashboard token count
         dashboard_content = "\n".join(lines)

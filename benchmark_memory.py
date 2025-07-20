@@ -49,6 +49,7 @@ def run_benchmark(
     service_cls: Type,
     tool_entries: List[Dict[str, Any]],
     workflow_id: str = "benchmark",
+    
 ) -> Dict[str, Any]:
     tc = TokenCounter()
 
@@ -241,7 +242,7 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        default="benchmark_comparison.jpg",
+        default="benchmark.jpg",
         help="Output path for comparison table JPG",
     )
     args = parser.parse_args()

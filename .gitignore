@@ -16,3 +16,4 @@ dist/
 build/
 *.egg
 src/__pycache__/
+.DS_Store

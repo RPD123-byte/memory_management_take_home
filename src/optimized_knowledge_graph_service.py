@@ -12,9 +12,6 @@ from token_budget_manager import TokenBudgetManager
 from llm_service import LLMService
 
 
-DETAILED_THRESHOLD_CNT = 5 # first 5 tools are detailed
-summary_THRESHOLD_PCT = 0.5 # next 50% of tools are summary
-
 class OptimizedKnowledgeGraphService(BaseKnowledgeGraphService):
     """Hierarchical memory management with content-aware and dynamic compression"""
     

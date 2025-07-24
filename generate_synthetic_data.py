@@ -40,45 +40,6 @@ DEVOPS_SCENARIOS = [
     "Load balancer configuration"
 ]
 
-COMMAND_PATTERNS = {
-    "aws": [
-        "aws s3 ls --recursive s3://{bucket}",
-        "aws ec2 describe-instances --filters Name=tag:Environment,Values={env}",
-        "aws iam list-users",
-        "aws cloudformation describe-stacks --stack-name {stack}",
-        "aws ecs list-services --cluster {cluster}"
-    ],
-    "kubernetes": [
-        "kubectl get pods -n {namespace}",
-        "kubectl describe deployment {deployment} -n {namespace}",
-        "kubectl apply -f {file}",
-        "kubectl logs -f {pod} -n {namespace}",
-        "kubectl get services --all-namespaces"
-    ],
-    "terraform": [
-        "terraform init",
-        "terraform plan -var-file={file}",
-        "terraform apply -auto-approve=false",
-        "terraform state list",
-        "terraform validate"
-    ],
-    "git": [
-        "git status",
-        "git diff {file}",
-        "git log --oneline -n 10",
-        "git branch -a",
-        "git checkout -b {branch}"
-    ],
-    "docker": [
-        "docker ps -a",
-        "docker images",
-        "docker logs {container}",
-        "docker build -t {image}:{tag} .",
-        "docker-compose up -d"
-    ]
-}
-
-
 class SyntheticDataGenerator:
     def __init__(self, api_key: str):
         self.llm_service = LLMService(api_key=api_key)

@@ -775,13 +775,16 @@ Summary:"""
         self.tool_counter = 0
         self.fingerprint_service.clear_cache()
         self.memory_manager.clear_all()
+        self.compression_groups = {}
+        self.compressed_tools = set()
         self.metrics = {
             "total_tools": 0,
             "duplicates_detected": 0,
             "semantic_matches_found": 0,
             "facts_extracted": 0,
             "tokens_saved": 0,
-            "memory_compressions": 0
+            "memory_compressions": 0,
+            "compression_groups_created": 0
         }
         print(colored(f"Reset workflow {self.workflow_id}", "yellow"))
     

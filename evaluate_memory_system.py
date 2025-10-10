@@ -239,6 +239,10 @@ class MemoryManagementEvaluator:
         
         print()  # New line after progress
         
+        # Wait for all async fact extractions to complete
+        if isinstance(service, ComprehensiveMemoryService):
+            service.wait_for_pending_extractions()
+        
         # Calculate duplicate detection metrics
         true_positives = len(set(detected_duplicates) & set(true_duplicate_indices))
         false_positives = len(set(detected_duplicates) - set(true_duplicate_indices))

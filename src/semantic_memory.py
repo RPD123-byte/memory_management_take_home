@@ -59,6 +59,9 @@ class SemanticMemoryService:
         # In-memory vector store (tool_id -> SemanticMemory)
         self.memory_store: Dict[str, SemanticMemory] = {}
         
+        # Embedding cache (description -> embedding) for duplicates
+        self.embedding_cache: Dict[str, List[float]] = {}
+        
         # Embedding dimension (depends on model)
         self.embedding_dim = 1536 if model == "text-embedding-3-small" else 3072
         
@@ -163,8 +166,14 @@ class SemanticMemoryService:
         """
         description = self.create_tool_description(tool_name, parameters, result, summary)
         
-        # Generate embedding (sync)
-        embedding = self.embeddings.embed_query(description)
+        # Check embedding cache first (avoids expensive API call for duplicates)
+        if description in self.embedding_cache:
+            embedding = self.embedding_cache[description]
+        else:
+            # Generate embedding (sync) - expensive API call
+            embedding = self.embeddings.embed_query(description)
+            # Cache it for future duplicates
+            self.embedding_cache[description] = embedding
         
         # Create semantic memory
         memory = SemanticMemory(

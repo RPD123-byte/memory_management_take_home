@@ -66,6 +66,7 @@ class MemoryManagementEvaluator:
         
         Format:
         - Full dataset: {"tools": [...], "metadata": {...}}
+        - Simple array: [tool1, tool2, ...]
         """
         with open(filepath, 'r') as f:
             data = json.load(f)
@@ -74,8 +75,11 @@ class MemoryManagementEvaluator:
         if isinstance(data, dict) and "tools" in data:
             # Full dataset with metadata
             return data["tools"]
+        elif isinstance(data, list):
+            # Simple array format
+            return data
         else:
-            raise ValueError(f"Invalid data format in {filepath}")
+            raise ValueError(f"Invalid data format in {filepath}. Expected list or dict with 'tools' key.")
     
     def generate_synthetic_duplicates(self, original_data: List[Dict[str, Any]], 
                                      duplicate_ratio: float = 0.3) -> Tuple[List[Dict[str, Any]], List[int]]:

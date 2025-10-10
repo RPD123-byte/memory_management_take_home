@@ -261,7 +261,9 @@ def main():
     print_section("PHASE 8: MEMORY COMPRESSION & EXPANSION")
     
     print("Demonstrating explicit compression control...")
-    print("(Agent can compress tools when token usage is high)\n")
+    print("Note: Summaries (raw → structured) already gave 52-67% reduction")
+    print("      Compression (structured → condensed groups) provides additional savings")
+    print("(Agent calls compress_tool_results() when token usage is high)\n")
     
     # Add a few more tools to have something to compress
     additional_tools = [

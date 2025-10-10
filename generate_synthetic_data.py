@@ -388,8 +388,29 @@ def main():
     """Generate and save synthetic test data"""
     generator = SyntheticDataGenerator(seed=42)
     
-    # Generate dataset
+    # Generate quick test dataset
     print("Generating synthetic test data...")
+    dataset_quick = generator.generate_dataset(
+        num_tools=20,
+        duplicate_ratio=0.25,
+        similar_ratio=0.15
+    )
+    
+    # Save quick test dataset
+    quick_path = "data/synthetic_test_quick.json"
+    with open(quick_path, 'w') as f:
+        json.dump(dataset_quick, f, indent=2)
+    
+    print(f"\n✓ Generated QUICK test dataset (20 tools):")
+    print(f"  Total tools: {dataset_quick['metadata']['total_tools']}")
+    print(f"  Unique tools: {dataset_quick['metadata']['unique_tools']}")
+    print(f"  Exact duplicates: {dataset_quick['metadata']['exact_duplicates']}")
+    print(f"  Similar groups: {dataset_quick['metadata']['similar_groups']}")
+    print(f"  Saved to: {quick_path}")
+    print(f"  Estimated test time: ~2-3 minutes")
+    
+    # Generate FULL dataset (100 tools = ~20min test time)
+    print("\nGenerating full test data...")
     dataset = generator.generate_dataset(
         num_tools=100,
         duplicate_ratio=0.2,
@@ -401,18 +422,19 @@ def main():
     with open(output_path, 'w') as f:
         json.dump(dataset, f, indent=2)
     
-    print(f"\nGenerated dataset:")
+    print(f"\n✓ Generated FULL test dataset (100 tools):")
     print(f"  Total tools: {dataset['metadata']['total_tools']}")
     print(f"  Unique tools: {dataset['metadata']['unique_tools']}")
     print(f"  Exact duplicates: {dataset['metadata']['exact_duplicates']}")
     print(f"  Similar groups: {dataset['metadata']['similar_groups']}")
-    print(f"\nSaved to: {output_path}")
-    print(f"\nTo load in evaluation script:")
-    print(f"  # Load full dataset")
-    print(f"  with open('{output_path}', 'r') as f:")
-    print(f"      dataset = json.load(f)")
-    print(f"      tools = dataset['tools']  # Extract tools array")
-    print(f"      metadata = dataset['metadata']  # Access ground truth")
+    print(f"  Saved to: {output_path}")
+    print(f"  Estimated test time: ~20 minutes")
+    
+    print("\n" + "="*60)
+    print("USAGE:")
+    print("  Quick iteration (2-3 min): --test-data data/synthetic_test_quick.json")
+    print("  Full validation (20 min):  --test-data data/synthetic_test_data.json")
+    print("="*60)
 
 
 if __name__ == "__main__":

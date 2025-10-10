@@ -1,158 +1,177 @@
 @startuml Memory Management System Architecture
 
 !theme plain
-skinparam backgroundColor #FFFFFF
+skinparam linetype ortho
+skinparam backgroundColor #FAFAFA
+skinparam shadowing false
+skinparam defaultFontSize 12
 skinparam defaultFontName Arial
-skinparam defaultFontSize 11
+skinparam padding 10
+skinparam nodesep 80
+skinparam ranksep 80
+skinparam componentStyle rectangle
 
-' Title
-title Memory Management System - Complete Architecture
+title Memory Management System - Clean Architecture
 
-' Agent Layer
-package "Agent Workflow" #E8F5E9 {
-  actor Agent
-  rectangle "Tool Execution" as TE
+' ============================================================================
+' LAYER 1: AGENT
+' ============================================================================
+rectangle "Agent" as Agent #E8F5E9 {
 }
 
-' Main Service Layer
+' ============================================================================
+' LAYER 2: MEMORY SERVICE (API + CORE)
+' ============================================================================
 package "Comprehensive Memory Service" #E3F2FD {
-  rectangle "API Layer" as API {
-    [add_tool_result()]
-    [generate_structured_summary()]
-    [check_for_duplicate()]
-    [search_memories_by_query()]
-    [compress_tool_results()]
-    [expand_tool_result()]
+  
+  rectangle "API Methods" as API #FFFFFF {
+    usecase "add_tool_result()" as UC1 #E3F2FD
+    usecase "generate_summary()" as UC2 #E3F2FD
+    usecase "check_duplicate()" as UC3 #E3F2FD
+    usecase "compress_tools()" as UC4 #E3F2FD
+    usecase "expand_tool()" as UC5 #E3F2FD
+    usecase "search_query()" as UC6 #E3F2FD
+    
+    UC1 -[hidden]down- UC2
+    UC2 -[hidden]down- UC3
+    UC3 -[hidden]down- UC4
+    UC4 -[hidden]down- UC5
+    UC5 -[hidden]down- UC6
   }
   
-  rectangle "Core Services" as Core {
-    component "Tool Fingerprint\nService" as TFS #FFE0B2
-    component "Semantic Memory\nService" as SMS #F3E5F5
-    component "LLM Service" as LLM #FFF9C4
-    component "Token Counter" as TC #FFCCBC
+  rectangle "Core Services" as CORE #FFFFFF {
+    component [Fingerprint\nService] as FPS #FFE0B2 {
+    }
+    component [Semantic\nMemory] as SEM #F3E5F5 {
+    }
+    component [LLM\nService] as LLM #FFF9C4 {
+    }
+    
+    FPS -[hidden]right- SEM
+    SEM -[hidden]right- LLM
   }
 }
 
-' Memory Manager Layer
-package "Hierarchical Memory Manager" #FFF3E0 {
-  rectangle "Working Memory" as WM #C8E6C9 {
-    card "Recent 50 Tools" as WM1
-    card "Compression Groups" as WM2
-    card "Expanded Tools" as WM3
+' ============================================================================
+' LAYER 3: MEMORY LAYERS
+' ============================================================================
+package "Hierarchical Memory" #FFF3E0 {
+  
+  storage "Working Memory\n(Recent 50 tools)" as WM #C8E6C9 {
+  }
+  storage "Static Memory\n(Unchanging)" as SM #BBDEFB {
+  }
+  storage "Fact Memory\n(Knowledge)" as FM #F8BBD0 {
+  }
+  storage "Vector Memory\n(Semantic)" as VM #E1BEE7 {
   }
   
-  rectangle "Static Memory" as SM #BBDEFB {
-    card "AWS Account\nRegion\nEnvironment" as SM1
-  }
-  
-  rectangle "Fact Memory" as FM #F8BBD0 {
-    card "Extracted Facts\n(Searchable)" as FM1
-  }
-  
-  rectangle "Vector Memory" as VM #E1BEE7 {
-    card "Embeddings\n(Semantic Search)" as VM1
-  }
+  WM -[hidden]right- SM
+  SM -[hidden]right- FM
+  FM -[hidden]right- VM
 }
 
-' Storage Layer
-package "Persistent Storage" #CFD8DC {
-  database "Neo4j Graph DB" as Neo4j {
-    card "Tool Results" as TR
-    card "Summaries" as SU
-    card "Compression Groups" as CG
-    card "Relationships" as RE
-  }
-  
-  database "Vector Store\n(In-Memory)" as VS {
-    card "Embeddings Cache" as EC
-  }
-}
+' ============================================================================
+' LAYER 4: STORAGE
+' ============================================================================
+database "Neo4j\nGraph DB" as DB #CFD8DC
 
-' Flow 1: Tool Execution Path
-Agent --> TE : executes tool
-TE --> [add_tool_result()] : tool_entry
+' ============================================================================
+' KEY FLOWS
+' ============================================================================
 
-' Flow 2: Duplicate Check
-[add_tool_result()] --> TFS : check fingerprint
-TFS --> TFS : SHA256 hash\nO(1) lookup
-TFS --> [add_tool_result()] : duplicate_info
+' Agent to API
+Agent -down-> UC1 : execute tool
+Agent -down-> UC4 : compress when\nmemory high
+Agent -down-> UC5 : expand when\ndetails needed
 
-' Flow 3: Storage Path
-[add_tool_result()] --> Neo4j : store result
-[add_tool_result()] --> WM : add to working
-[add_tool_result()] --> TC : count tokens
+' API to Core Services
+UC1 -right-> FPS : check duplicate
+UC1 -right-> LLM : generate summary
+UC4 -right-> LLM : combine summaries
+UC6 -right-> SEM : semantic search
 
-' Flow 4: Summarization Path
-[generate_structured_summary()] --> Neo4j : fetch tool
-[generate_structured_summary()] --> LLM : generate summary
-LLM --> [generate_structured_summary()] : structured output
-[generate_structured_summary()] --> FM : extract facts
-[generate_structured_summary()] --> SM : update static (if system info)
+' Core to Memory Layers
+FPS -down-> WM : store if new
+LLM -down-> WM : add summary
+LLM -down-> FM : extract facts
+SEM -down-> VM : search vectors
 
-' Flow 5: Semantic Search Path
-[search_memories_by_query()] --> SMS : query
-SMS --> VS : embedding lookup
-SMS --> VM : semantic match
-VM --> [search_memories_by_query()] : ranked results
+' Memory to Storage
+WM -down-> DB : persist tools
+FM -down-> DB : persist facts
+VM -down-> DB : persist embeddings
+UC4 -down-> DB : store compression
 
-' Flow 6: Compression Path
-[compress_tool_results()] --> Neo4j : fetch tools
-[compress_tool_results()] --> LLM : generate combined summary
-LLM --> [compress_tool_results()] : compressed summary
-[compress_tool_results()] --> Neo4j : store compression group
-[compress_tool_results()] --> WM : update with group
+' Compression Integration
+UC4 ..> WM : remove full tools,\nadd groups
+UC5 ..> DB : fetch compressed
+UC5 ..> WM : restore temporarily
 
-' Flow 7: Expansion Path
-[expand_tool_result()] --> Neo4j : fetch full details
-[expand_tool_result()] --> WM : temporarily restore
-[expand_tool_result()] --> Agent : full tool details
+' Memory to Agent (Context Assembly)
+WM -up-> Agent : recent context
+SM -up-> Agent : static context
+FM -up-> Agent : relevant facts
+VM -up-> Agent : semantic matches
 
-' Flow 8: Context Assembly
-WM --> Agent : recent context
-SM --> Agent : static context
-FM --> Agent : relevant facts
-VM --> Agent : semantic matches
+' ============================================================================
+' ANNOTATIONS
+' ============================================================================
 
-' Legend
-legend right
-  |= Symbol |= Meaning |
-  | <#FFE0B2> | Duplicate Detection |
-  | <#F3E5F5> | Semantic Search |
-  | <#FFF9C4> | LLM Operations |
-  | <#C8E6C9> | Working Memory |
-  | <#BBDEFB> | Static Memory |
-  | <#F8BBD0> | Fact Memory |
-  | <#E1BEE7> | Vector Memory |
-end legend
-
-note right of TFS
-  **Fingerprint Service**
-  • SHA256 hashing
-  • O(1) duplicate lookup
-  • 100% accuracy
+note right of FPS
+  <b>Duplicate Detection</b>
+  SHA256 hashing
+  O(1) lookup
+  100% accuracy
 end note
 
-note right of SMS
-  **Semantic Memory**
-  • OpenAI embeddings
-  • Cosine similarity
-  • Fuzzy matching
+note right of SEM
+  <b>Semantic Search</b>
+  OpenAI embeddings
+  Cosine similarity
+  Fuzzy matching
 end note
 
 note bottom of WM
-  **Working Memory**
-  • Recent 50 tools
-  • FIFO eviction
-  • Compression groups
-  • Temporary expansions
+  <b>Compression State</b>
+  Full tool details OR
+  compression groups
+  Temporary expansions
 end note
 
-note bottom of Neo4j
-  **Graph Database**
-  • Tool results
-  • Summaries
-  • Compression groups
-  • Workflow isolation
+note bottom of SM
+  <b>Never Compressed</b>
+  Always available
 end note
+
+note bottom of FM
+  <b>Preserved</b>
+  Extracted before
+  compression
+end note
+
+note bottom of VM
+  <b>Preserved</b>
+  Embeddings remain
+  searchable
+end note
+
+legend bottom right
+  <b>Key Features</b>
+  100% duplicate detection
+  31% token reduction
+  Hierarchical memory
+  On-demand compression
+  Semantic search
+  ====
+  <b>Color Guide</b>
+  <#FFE0B2> Fingerprinting
+  <#F3E5F5> Semantic
+  <#FFF9C4> LLM
+  <#C8E6C9> Working
+  <#BBDEFB> Static
+  <#F8BBD0> Facts
+  <#E1BEE7> Vectors
+end legend
 
 @enduml

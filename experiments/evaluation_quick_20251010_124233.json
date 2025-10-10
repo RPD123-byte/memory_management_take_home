@@ -1,0 +1,49 @@
+{
+  "timestamp": "20251010_124233",
+  "evaluation_date": "2025-10-10T12:42:33.412368",
+  "original": {
+    "system_name": "Original System",
+    "total_tools": 26,
+    "duplicates_detected": 0,
+    "duplicate_detection_rate": 0.0,
+    "false_positives": 0,
+    "false_negatives": 6,
+    "total_tokens": 2208,
+    "avg_tokens_per_tool": 84.92307692307692,
+    "tokens_saved": 0,
+    "token_savings_rate": 0,
+    "semantic_matches_found": 0,
+    "semantic_recall_rate": 0.0,
+    "avg_add_latency_ms": 902.493770305927,
+    "avg_summary_latency_ms": 4664.838231526888,
+    "avg_search_latency_ms": 0
+  },
+  "comprehensive": {
+    "system_name": "Comprehensive System",
+    "total_tools": 26,
+    "duplicates_detected": 14,
+    "duplicate_detection_rate": 100.0,
+    "false_positives": 8,
+    "false_negatives": 0,
+    "total_tokens": 1052,
+    "avg_tokens_per_tool": 40.46153846153846,
+    "tokens_saved": 0,
+    "token_savings_rate": 0,
+    "semantic_matches_found": 1,
+    "semantic_recall_rate": 3.8461538461538463,
+    "avg_add_latency_ms": 436.48689526778,
+    "avg_summary_latency_ms": 7562.298673849839,
+    "avg_search_latency_ms": 487.73741722106934
+  },
+  "improvements": {
+    "token_reduction_percent": 52.35507246376812,
+    "latency_improvement_percent": 51.635467232109555,
+    "duplicate_detection_improvement": 100.0,
+    "facts_extracted": 1
+  },
+  "test_config": {
+    "total_tools": 26,
+    "true_duplicates": 6,
+    "test_data_source": "data/synthetic_test_quick.json"
+  }
+}

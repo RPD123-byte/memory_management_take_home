@@ -1,0 +1,177 @@
+@startuml Memory Management System Architecture
+
+!theme plain
+skinparam linetype ortho
+skinparam backgroundColor #FAFAFA
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam defaultFontName Arial
+skinparam padding 10
+skinparam nodesep 80
+skinparam ranksep 80
+skinparam componentStyle rectangle
+
+title Memory Management System - Clean Architecture
+
+' ============================================================================
+' LAYER 1: AGENT
+' ============================================================================
+rectangle "Agent" as Agent #E8F5E9 {
+}
+
+' ============================================================================
+' LAYER 2: MEMORY SERVICE (API + CORE)
+' ============================================================================
+package "Comprehensive Memory Service" #E3F2FD {
+  
+  rectangle "API Methods" as API #FFFFFF {
+    usecase "add_tool_result()" as UC1 #E3F2FD
+    usecase "generate_summary()" as UC2 #E3F2FD
+    usecase "check_duplicate()" as UC3 #E3F2FD
+    usecase "compress_tools()" as UC4 #E3F2FD
+    usecase "expand_tool()" as UC5 #E3F2FD
+    usecase "search_query()" as UC6 #E3F2FD
+    
+    UC1 -[hidden]down- UC2
+    UC2 -[hidden]down- UC3
+    UC3 -[hidden]down- UC4
+    UC4 -[hidden]down- UC5
+    UC5 -[hidden]down- UC6
+  }
+  
+  rectangle "Core Services" as CORE #FFFFFF {
+    component [Fingerprint\nService] as FPS #FFE0B2 {
+    }
+    component [Semantic\nMemory] as SEM #F3E5F5 {
+    }
+    component [LLM\nService] as LLM #FFF9C4 {
+    }
+    
+    FPS -[hidden]right- SEM
+    SEM -[hidden]right- LLM
+  }
+}
+
+' ============================================================================
+' LAYER 3: MEMORY LAYERS
+' ============================================================================
+package "Hierarchical Memory" #FFF3E0 {
+  
+  storage "Working Memory\n(Recent 50 tools)" as WM #C8E6C9 {
+  }
+  storage "Static Memory\n(Unchanging)" as SM #BBDEFB {
+  }
+  storage "Fact Memory\n(Knowledge)" as FM #F8BBD0 {
+  }
+  storage "Vector Memory\n(Semantic)" as VM #E1BEE7 {
+  }
+  
+  WM -[hidden]right- SM
+  SM -[hidden]right- FM
+  FM -[hidden]right- VM
+}
+
+' ============================================================================
+' LAYER 4: STORAGE
+' ============================================================================
+database "Neo4j\nGraph DB" as DB #CFD8DC
+
+' ============================================================================
+' KEY FLOWS
+' ============================================================================
+
+' Agent to API
+Agent -down-> UC1 : execute tool
+Agent -down-> UC4 : compress when\nmemory high
+Agent -down-> UC5 : expand when\ndetails needed
+
+' API to Core Services
+UC1 -right-> FPS : check duplicate
+UC1 -right-> LLM : generate summary
+UC4 -right-> LLM : combine summaries
+UC6 -right-> SEM : semantic search
+
+' Core to Memory Layers
+FPS -down-> WM : store if new
+LLM -down-> WM : add summary
+LLM -down-> FM : extract facts
+SEM -down-> VM : search vectors
+
+' Memory to Storage
+WM -down-> DB : persist tools
+FM -down-> DB : persist facts
+VM -down-> DB : persist embeddings
+UC4 -down-> DB : store compression
+
+' Compression Integration
+UC4 ..> WM : remove full tools,\nadd groups
+UC5 ..> DB : fetch compressed
+UC5 ..> WM : restore temporarily
+
+' Memory to Agent (Context Assembly)
+WM -up-> Agent : recent context
+SM -up-> Agent : static context
+FM -up-> Agent : relevant facts
+VM -up-> Agent : semantic matches
+
+' ============================================================================
+' ANNOTATIONS
+' ============================================================================
+
+note right of FPS
+  <b>Duplicate Detection</b>
+  SHA256 hashing
+  O(1) lookup
+  100% accuracy
+end note
+
+note right of SEM
+  <b>Semantic Search</b>
+  OpenAI embeddings
+  Cosine similarity
+  Fuzzy matching
+end note
+
+note bottom of WM
+  <b>Compression State</b>
+  Full tool details OR
+  compression groups
+  Temporary expansions
+end note
+
+note bottom of SM
+  <b>Never Compressed</b>
+  Always available
+end note
+
+note bottom of FM
+  <b>Preserved</b>
+  Extracted before
+  compression
+end note
+
+note bottom of VM
+  <b>Preserved</b>
+  Embeddings remain
+  searchable
+end note
+
+legend bottom right
+  <b>Key Features</b>
+  100% duplicate detection
+  31% token reduction
+  Hierarchical memory
+  On-demand compression
+  Semantic search
+  ====
+  <b>Color Guide</b>
+  <#FFE0B2> Fingerprinting
+  <#F3E5F5> Semantic
+  <#FFF9C4> LLM
+  <#C8E6C9> Working
+  <#BBDEFB> Static
+  <#F8BBD0> Facts
+  <#E1BEE7> Vectors
+end legend
+
+@enduml

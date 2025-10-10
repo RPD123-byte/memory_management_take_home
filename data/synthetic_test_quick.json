@@ -1,0 +1,306 @@
+{
+  "tools": [
+    {
+      "action_type": "api_call",
+      "action": {
+        "endpoint": "/metrics",
+        "method": "GET",
+        "params": {}
+      },
+      "result": {
+        "status": "success",
+        "status_code": 200,
+        "response": {
+          "status": "ok"
+        }
+      },
+      "timestamp": "2025-01-02T03:09:00"
+    },
+    {
+      "action_type": "execute_command",
+      "action": {
+        "command": "mysql -e 'SHOW TABLES' --output json --output json --output json"
+      },
+      "result": {
+        "status": "success",
+        "output": "Command output for: mysql -e 'SHOW TABLES' (variant)",
+        "exit_code": 0
+      },
+      "timestamp": "2025-01-25T20:21:00"
+    },
+    {
+      "action_type": "read_file",
+      "action": {
+        "file_path": "k8s/deployment.yaml"
+      },
+      "result": {
+        "status": "success",
+        "content": "version: '3.8'\nservices:\n  app:\n    image: myapp:latest\n    ports:\n      - 8000:8000",
+        "lines": 193
+      },
+      "timestamp": "2025-01-11T06:41:00"
+    },
+    {
+      "action_type": "execute_command",
+      "action": {
+        "command": "kubectl get services"
+      },
+      "result": {
+        "status": "success",
+        "output": "Command output for: kubectl get services",
+        "exit_code": 0
+      },
+      "timestamp": "2025-01-02T00:05:00"
+    },
+    {
+      "action_type": "api_call",
+      "action": {
+        "endpoint": "/api/posts",
+        "method": "POST",
+        "params": {
+          "title": "New Post",
+          "body": "Content"
+        }
+      },
+      "result": {
+        "status": "success",
+        "status_code": 200,
+        "response": {
+          "id": 371,
+          "title": "Post Title"
+        }
+      },
+      "timestamp": "2025-01-06T21:27:00"
+    },
+    {
+      "action_type": "execute_command",
+      "action": {
+        "command": "find /src -name '*.py'"
+      },
+      "result": {
+        "status": "success",
+        "output": "Command output for: find /src -name '*.py'",
+        "exit_code": 0
+      },
+      "timestamp": "2025-01-14T10:17:00"
+    },
+    {
+      "action_type": "read_file",
+      "action": {
+        "file_path": "README.md"
+      },
+      "result": {
+        "status": "success",
+        "content": "Content of README.md\n...",
+        "lines": 111
+      },
+      "timestamp": "2025-01-29T20:29:00"
+    },
+    {
+      "action_type": "execute_command",
+      "action": {
+        "command": "aws s3 ls s3://my-bucket-4 --recursive"
+      },
+      "result": {
+        "status": "success",
+        "output": "2025-01-01 12:00:00    bucket-94\n2025-01-01 12:00:00    bucket-94\n2025-01-01 12:00:00    bucket-94\n2025-01-01 12:00:00    bucket-94\n",
+        "exit_code": 0
+      },
+      "timestamp": "2025-01-18T03:59:00"
+    },
+    {
+      "action_type": "write_file",
+      "action": {
+        "file_path": "terraform/variables.tf",
+        "content": "# Generated content for terraform/variables.tf\n..."
+      },
+      "result": {
+        "status": "success",
+        "bytes_written": 2269
+      },
+      "timestamp": "2025-01-28T00:43:00"
+    },
+    {
+      "action_type": "api_call",
+      "action": {
+        "endpoint": "/api/auth/login",
+        "method": "POST",
+        "params": {
+          "username": "admin",
+          "password": "***"
+        }
+      },
+      "result": {
+        "status": "success",
+        "status_code": 200,
+        "response": {
+          "status": "ok"
+        }
+      },
+      "timestamp": "2025-01-09T23:37:00"
+    },
+    {
+      "action_type": "execute_command",
+      "action": {
+        "command": "mysql -e 'SHOW TABLES' --output json --output json --output json"
+      },
+      "result": {
+        "status": "success",
+        "output": "Command output for: mysql -e 'SHOW TABLES' (variant)",
+        "exit_code": 0
+      },
+      "timestamp": "2025-01-06T14:00:00"
+    },
+    {
+      "action_type": "api_call",
+      "action": {
+        "endpoint": "/api/auth/login",
+        "method": "POST",
+        "params": {
+          "username": "admin",
+          "password": "***"
+        }
+      },
+      "result": {
+        "status": "success",
+        "status_code": 200,
+        "response": {
+          "status": "ok"
+        }
+      },
+      "timestamp": "2025-01-15T16:16:00"
+    },
+    {
+      "action_type": "execute_command",
+      "action": {
+        "command": "mysql -e 'SHOW TABLES' --output json --output json --output json"
+      },
+      "result": {
+        "status": "success",
+        "output": "Command output for: mysql -e 'SHOW TABLES'",
+        "exit_code": 0
+      },
+      "timestamp": "2025-01-06T17:46:00"
+    },
+    {
+      "action_type": "api_call",
+      "action": {
+        "endpoint": "/api/posts",
+        "method": "POST",
+        "params": {
+          "title": "New Post",
+          "body": "Content"
+        }
+      },
+      "result": {
+        "status": "success",
+        "status_code": 200,
+        "response": {
+          "id": 371,
+          "title": "Post Title"
+        }
+      },
+      "timestamp": "2025-01-08T04:32:00"
+    },
+    {
+      "action_type": "api_call",
+      "action": {
+        "endpoint": "/api/auth/login",
+        "method": "POST",
+        "params": {
+          "username": "admin",
+          "password": "***"
+        }
+      },
+      "result": {
+        "status": "success",
+        "status_code": 200,
+        "response": {
+          "status": "ok"
+        }
+      },
+      "timestamp": "2025-01-03T12:24:00"
+    },
+    {
+      "action_type": "execute_command",
+      "action": {
+        "command": "aws ec2 describe-instances --instance-ids i-838797"
+      },
+      "result": {
+        "status": "success",
+        "output": "Command output for: aws ec2 describe-instances --instance-ids i-838797",
+        "exit_code": 0
+      },
+      "timestamp": "2025-01-28T03:24:00"
+    },
+    {
+      "action_type": "execute_command",
+      "action": {
+        "command": "mysql -e 'SHOW TABLES' --output json --output json --output json"
+      },
+      "result": {
+        "status": "success",
+        "output": "Command output for: mysql -e 'SHOW TABLES' (variant)",
+        "exit_code": 0
+      },
+      "timestamp": "2025-01-04T09:27:00"
+    },
+    {
+      "action_type": "execute_command",
+      "action": {
+        "command": "aws s3 ls s3://my-bucket-3 --recursive"
+      },
+      "result": {
+        "status": "success",
+        "output": "2025-01-01 12:00:00    bucket-41\n2025-01-01 12:00:00    bucket-41\n2025-01-01 12:00:00    bucket-41\n2025-01-01 12:00:00    bucket-41\n",
+        "exit_code": 0
+      },
+      "timestamp": "2025-01-09T02:13:00"
+    },
+    {
+      "action_type": "execute_command",
+      "action": {
+        "command": "aws ec2 describe-instances --instance-ids i-838797"
+      },
+      "result": {
+        "status": "success",
+        "output": "Command output for: aws ec2 describe-instances --instance-ids i-838797",
+        "exit_code": 0
+      },
+      "timestamp": "2025-01-22T17:48:00"
+    },
+    {
+      "action_type": "write_file",
+      "action": {
+        "file_path": "terraform/variables.tf",
+        "content": "# Generated content for terraform/variables.tf\n..."
+      },
+      "result": {
+        "status": "success",
+        "bytes_written": 2269
+      },
+      "timestamp": "2025-01-05T07:47:00"
+    }
+  ],
+  "metadata": {
+    "total_tools": 20,
+    "unique_tools": 12,
+    "exact_duplicates": 5,
+    "similar_groups": [
+      [
+        12,
+        1,
+        16,
+        10
+      ]
+    ],
+    "duplicate_indices": [
+      4,
+      14,
+      11,
+      8,
+      18
+    ],
+    "generated_at": "2025-10-10T12:35:04.552796"
+  }
+}

@@ -178,12 +178,19 @@ You are an expert at extracting key facts from tool execution results that an AI
 </role>
 
 <task>
-Extract discrete, memorable facts from this tool execution. Focus on:
+Extract 3-5 discrete, memorable facts from this tool execution. Be LIBERAL with extraction - if something could be useful, extract it!
+
+Focus on:
 1. Resource identifiers (ARNs, IDs, file paths, URLs)
 2. Configuration values and settings
 3. Status information and states
 4. Relationships between resources
 5. Important discoveries or outcomes
+6. Capabilities and features discovered
+7. Error patterns and constraints
+
+IMPORTANT: Extract multiple facts per tool execution. Aim for 3-5 facts minimum.
+Even simple tool executions contain multiple learnable facts (e.g., "tool exists", "tool works", "tool has parameter X", "tool returned format Y").
 
 Return a JSON array of facts. Each fact should be:
 - Self-contained and understandable without context
@@ -458,6 +465,9 @@ class WorkingMemoryBlock(BaseMemoryBlock):
         self.active_tools: List[str] = []
         self.context_notes: List[str] = []
         self.max_context_notes = 10
+        # Compression support
+        self.compression_groups: Dict[str, str] = {}  # group_id -> summary
+        self.expanded_tools: Dict[str, Dict[str, Any]] = {}  # tool_id -> full content
         
     def put(self, data: Dict[str, Any]):
         """
@@ -506,6 +516,11 @@ class WorkingMemoryBlock(BaseMemoryBlock):
             for note in self.context_notes[-3:]:
                 lines.append(f"  • {note}")
         
+        # Add compression info
+        compression_info = self.get_compression_info()
+        if compression_info:
+            lines.append(compression_info)
+        
         return "\n".join(lines)
     
     def clear(self):
@@ -521,6 +536,32 @@ class WorkingMemoryBlock(BaseMemoryBlock):
     def add_context_note(self, note: str):
         """Add a context note"""
         self.put({"type": "context_note", "note": note})
+    
+    def add_compression_group(self, group_id: str, summary: str):
+        """Add a compression group reference to working memory"""
+        self.compression_groups[group_id] = summary
+    
+    def add_expanded_tool(self, tool_id: str, content: Dict[str, Any]):
+        """Temporarily add expanded tool to working memory"""
+        self.expanded_tools[tool_id] = content
+    
+    def get_compression_info(self) -> str:
+        """Get formatted compression info"""
+        if not self.compression_groups and not self.expanded_tools:
+            return ""
+        
+        lines = []
+        if self.compression_groups:
+            lines.append("\n=== COMPRESSED GROUPS ===")
+            for group_id, summary in self.compression_groups.items():
+                lines.append(f"[{group_id}] {summary}")
+        
+        if self.expanded_tools:
+            lines.append("\n=== EXPANDED TOOLS (Full Details) ===")
+            for tool_id in self.expanded_tools.keys():
+                lines.append(f"[{tool_id}] Full details available")
+        
+        return "\n".join(lines)
 
 
 class HierarchicalMemoryManager:

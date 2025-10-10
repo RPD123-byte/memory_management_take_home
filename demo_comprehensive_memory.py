@@ -257,8 +257,84 @@ def main():
         elif 'info_count' in info:
             print(f"  Static entries: {info['info_count']}")
     
-    # ========== PHASE 8: Performance Metrics ==========
-    print_section("PHASE 8: PERFORMANCE METRICS")
+    # ========== PHASE 8: Memory Compression & Expansion ==========
+    print_section("PHASE 8: MEMORY COMPRESSION & EXPANSION")
+    
+    print("Demonstrating explicit compression control...")
+    print("(Agent can compress tools when token usage is high)\n")
+    
+    # Add a few more tools to have something to compress
+    additional_tools = [
+        {
+            "action_type": "execute_command",
+            "action": {"command": "aws ec2 describe-vpcs"},
+            "result": {"status": "success", "output": "vpc-12345"},
+            "timestamp": "2025-10-10T10:08:00"
+        },
+        {
+            "action_type": "execute_command",
+            "action": {"command": "aws ec2 describe-subnets"},
+            "result": {"status": "success", "output": "subnet-67890"},
+            "timestamp": "2025-10-10T10:09:00"
+        }
+    ]
+    
+    print("Adding additional AWS tools...")
+    aws_tool_ids = []
+    for tool in additional_tools:
+        tool_id, dup_info = service.add_tool_result(tool)
+        if tool_id:
+            aws_tool_ids.append(tool_id)
+            print(f"  Added {tool_id}: {tool['action']['command']}")
+    
+    print(f"\nCollecting AWS-related tool IDs for compression...")
+    # Get all AWS-related tools
+    all_tool_results = service.get_all_tool_results()
+    aws_tools_to_compress = [
+        tr.tool_id for tr in all_tool_results 
+        if 'aws' in tr.action.get('command', '').lower()
+    ][:5]  # Compress first 5 AWS tools
+    
+    print(f"Found {len(aws_tools_to_compress)} AWS tools: {', '.join(aws_tools_to_compress)}")
+    
+    if aws_tools_to_compress:
+        # Compress AWS tools
+        print(f"\nCompressing {len(aws_tools_to_compress)} AWS tools into group...")
+        success = service.compress_tool_results(aws_tools_to_compress, "aws_initial_setup")
+        
+        if success:
+            # Show compression results
+            compression_summary = service.get_compression_summary()
+            print(colored("\n Compression successful!", "green", attrs=["bold"]))
+            print(f"  Groups created: {compression_summary['total_groups']}")
+            print(f"  Tools compressed: {compression_summary['compressed_tools']}")
+            print(f"  Tokens saved: {compression_summary['total_tokens_saved']:,}")
+            
+            for group_id, group_info in compression_summary['groups'].items():
+                print(f"\n  Group '{group_id}':")
+                print(f"    Tools: {group_info['tool_count']}")
+                print(f"    Tokens saved: {group_info['tokens_saved']:,}")
+            
+            # Now demonstrate expansion
+            print("\n--- Expansion Demo ---")
+            print("Agent needs specific info from compressed tool...\n")
+            
+            tool_to_expand = aws_tools_to_compress[0]
+            print(f"Expanding {tool_to_expand} to get full details...")
+            
+            full_details = service.expand_tool_result(tool_to_expand)
+            if full_details:
+                print(colored(f" Successfully expanded {tool_to_expand}", "green"))
+                print(f"  Action: {full_details.get('action_type')}")
+                print(f"  Command: {full_details.get('action', {}).get('command', 'N/A')}")
+                print("  (Full details now available in working memory)")
+        else:
+            print(colored("✗ Compression failed", "red"))
+    else:
+        print("No AWS tools found to compress")
+    
+    # ========== PHASE 9: Performance Metrics ==========
+    print_section("PHASE 9: PERFORMANCE METRICS")
     
     metrics = service.get_metrics()
     
@@ -270,6 +346,8 @@ def main():
     print(f"  Semantic hit rate: {metrics['semantic_hit_rate']:.1f}%")
     print(f"  Facts extracted: {metrics['facts_extracted']}")
     print(f"  Tokens saved: {metrics['tokens_saved']:,}")
+    print(f"  Compression groups created: {metrics.get('compression_groups_created', 0)}")
+    print(f"  Memory compressions: {metrics.get('memory_compressions', 0)}")
     
     # ========== SUMMARY ==========
     print_section("DEMO COMPLETE - SUMMARY")
@@ -295,6 +373,11 @@ def main():
     print(colored(" DEDUPLICATION", "green", attrs=["bold"]))
     print("  → Prevents redundant executions")
     print("  → Proactive warnings")
+    print()
+    print(colored(" COMPRESSION & EXPANSION", "green", attrs=["bold"]))
+    print("  → Explicit memory compression control")
+    print("  → Expand compressed tools on demand")
+    print("  → Token-efficient context management")
     print()
     
     # Cleanup

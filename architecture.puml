@@ -1,0 +1,158 @@
+@startuml Memory Management System Architecture
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+' Title
+title Memory Management System - Complete Architecture
+
+' Agent Layer
+package "Agent Workflow" #E8F5E9 {
+  actor Agent
+  rectangle "Tool Execution" as TE
+}
+
+' Main Service Layer
+package "Comprehensive Memory Service" #E3F2FD {
+  rectangle "API Layer" as API {
+    [add_tool_result()]
+    [generate_structured_summary()]
+    [check_for_duplicate()]
+    [search_memories_by_query()]
+    [compress_tool_results()]
+    [expand_tool_result()]
+  }
+  
+  rectangle "Core Services" as Core {
+    component "Tool Fingerprint\nService" as TFS #FFE0B2
+    component "Semantic Memory\nService" as SMS #F3E5F5
+    component "LLM Service" as LLM #FFF9C4
+    component "Token Counter" as TC #FFCCBC
+  }
+}
+
+' Memory Manager Layer
+package "Hierarchical Memory Manager" #FFF3E0 {
+  rectangle "Working Memory" as WM #C8E6C9 {
+    card "Recent 50 Tools" as WM1
+    card "Compression Groups" as WM2
+    card "Expanded Tools" as WM3
+  }
+  
+  rectangle "Static Memory" as SM #BBDEFB {
+    card "AWS Account\nRegion\nEnvironment" as SM1
+  }
+  
+  rectangle "Fact Memory" as FM #F8BBD0 {
+    card "Extracted Facts\n(Searchable)" as FM1
+  }
+  
+  rectangle "Vector Memory" as VM #E1BEE7 {
+    card "Embeddings\n(Semantic Search)" as VM1
+  }
+}
+
+' Storage Layer
+package "Persistent Storage" #CFD8DC {
+  database "Neo4j Graph DB" as Neo4j {
+    card "Tool Results" as TR
+    card "Summaries" as SU
+    card "Compression Groups" as CG
+    card "Relationships" as RE
+  }
+  
+  database "Vector Store\n(In-Memory)" as VS {
+    card "Embeddings Cache" as EC
+  }
+}
+
+' Flow 1: Tool Execution Path
+Agent --> TE : executes tool
+TE --> [add_tool_result()] : tool_entry
+
+' Flow 2: Duplicate Check
+[add_tool_result()] --> TFS : check fingerprint
+TFS --> TFS : SHA256 hash\nO(1) lookup
+TFS --> [add_tool_result()] : duplicate_info
+
+' Flow 3: Storage Path
+[add_tool_result()] --> Neo4j : store result
+[add_tool_result()] --> WM : add to working
+[add_tool_result()] --> TC : count tokens
+
+' Flow 4: Summarization Path
+[generate_structured_summary()] --> Neo4j : fetch tool
+[generate_structured_summary()] --> LLM : generate summary
+LLM --> [generate_structured_summary()] : structured output
+[generate_structured_summary()] --> FM : extract facts
+[generate_structured_summary()] --> SM : update static (if system info)
+
+' Flow 5: Semantic Search Path
+[search_memories_by_query()] --> SMS : query
+SMS --> VS : embedding lookup
+SMS --> VM : semantic match
+VM --> [search_memories_by_query()] : ranked results
+
+' Flow 6: Compression Path
+[compress_tool_results()] --> Neo4j : fetch tools
+[compress_tool_results()] --> LLM : generate combined summary
+LLM --> [compress_tool_results()] : compressed summary
+[compress_tool_results()] --> Neo4j : store compression group
+[compress_tool_results()] --> WM : update with group
+
+' Flow 7: Expansion Path
+[expand_tool_result()] --> Neo4j : fetch full details
+[expand_tool_result()] --> WM : temporarily restore
+[expand_tool_result()] --> Agent : full tool details
+
+' Flow 8: Context Assembly
+WM --> Agent : recent context
+SM --> Agent : static context
+FM --> Agent : relevant facts
+VM --> Agent : semantic matches
+
+' Legend
+legend right
+  |= Symbol |= Meaning |
+  | <#FFE0B2> | Duplicate Detection |
+  | <#F3E5F5> | Semantic Search |
+  | <#FFF9C4> | LLM Operations |
+  | <#C8E6C9> | Working Memory |
+  | <#BBDEFB> | Static Memory |
+  | <#F8BBD0> | Fact Memory |
+  | <#E1BEE7> | Vector Memory |
+end legend
+
+note right of TFS
+  **Fingerprint Service**
+  • SHA256 hashing
+  • O(1) duplicate lookup
+  • 100% accuracy
+end note
+
+note right of SMS
+  **Semantic Memory**
+  • OpenAI embeddings
+  • Cosine similarity
+  • Fuzzy matching
+end note
+
+note bottom of WM
+  **Working Memory**
+  • Recent 50 tools
+  • FIFO eviction
+  • Compression groups
+  • Temporary expansions
+end note
+
+note bottom of Neo4j
+  **Graph Database**
+  • Tool results
+  • Summaries
+  • Compression groups
+  • Workflow isolation
+end note
+
+@enduml

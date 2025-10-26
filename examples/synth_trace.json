@@ -1,0 +1,58 @@
+[
+  {
+    "timestamp": "2025-10-25T12:00:00Z",
+    "action_type": "read_file_contents",
+    "action": {"file_path": "app/config.yaml", "cwd": ""},
+    "result": {"status": "success", "output": "foo: 1\nbar: 2\n"}
+  },
+  {
+    "timestamp": "2025-10-25T12:00:10Z",
+    "action_type": "read_file_contents",
+    "action": {"file_path": "app/config.yaml", "cwd": ""},
+    "result": {"status": "success", "output": "foo: 1\nbar: 2\n"}
+  },
+
+  {
+    "timestamp": "2025-10-25T12:01:00Z",
+    "action_type": "modify_code",
+    "action": {
+      "files": ["app/config.yaml"],
+      "instructions": "bump foo",
+      "code": "foo: 3\nbar: 2\n"
+    },
+    "result": {"status": "success", "output": "modified"}
+  },
+
+  {
+    "timestamp": "2025-10-25T12:01:05Z",
+    "action_type": "read_file_contents",
+    "action": {"file_path": "app/config.yaml", "cwd": ""},
+    "result": {"status": "success", "output": "foo: 3\nbar: 2\n"}
+  },
+
+  {
+    "timestamp": "2025-10-25T12:02:00Z",
+    "action_type": "read_file_contents",
+    "action": {"file_path": "app/README.md", "cwd": ""},
+    "result": {"status": "success", "output": "Hello world"}
+  },
+  {
+    "timestamp": "2025-10-25T12:02:05Z",
+    "action_type": "read_file_contents",
+    "action": {"file_path": "app/README.md", "cwd": ""},
+    "result": {"status": "success", "output": "Hello world"}
+  },
+
+  {
+    "timestamp": "2025-10-25T12:03:00Z",
+    "action_type": "execute_command",
+    "action": {"command": "aws s3 ls s3://my-bucket", "background": false},
+    "result": {"status": "success", "output": "2025-10-20  ..."}
+  },
+  {
+    "timestamp": "2025-10-25T12:03:10Z",
+    "action_type": "execute_command",
+    "action": {"command": "aws s3 ls s3://my-bucket", "background": false},
+    "result": {"status": "success", "output": "2025-10-20  ..."}
+  }
+]

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+    #!/usr/bin/env python3
 """
 Demo script showing the memory management and compression system in action.
 
@@ -103,6 +103,29 @@ def test_services():
     
     return True
 
+def run_entry_with_cache(kg_service: KnowledgeGraphService, tool_entry: Dict[str, Any], token_counter) -> Dict[str, Any]:
+    """
+    Try to reuse a cached result for READ-like actions.
+    If cache hit -> return {"reused": True, "tool_id": <TR-id>, "avoided_tokens": <int>}
+    If miss -> add a new tool result and return {"reused": False, "tool_id": "TR-x", "avoided_tokens": 0}
+    """
+    action_type = tool_entry.get("action_type", "unknown")
+    action = tool_entry.get("action", {}) or {}
+
+    # only try reuse for reads
+    op_type = kg_service._classify_op(action_type, action)
+    if op_type == "read":
+        cached = kg_service.preflight(action_type, action)
+        if cached:
+            # estimate tokens we would have added if we *did* store this tool result
+            would_store = json.dumps(tool_entry, indent=2)
+            avoided = token_counter.count_tokens(would_store)
+            print(colored(kg_service.render_reused_result(cached), "magenta"))
+            return {"reused": True, "tool_id": cached["tool_id"], "avoided_tokens": avoided}
+
+    # miss (or write): store a new node
+    tool_id = kg_service.add_tool_result(tool_entry)
+    return {"reused": False, "tool_id": tool_id, "avoided_tokens": 0}
 
 def simulate_agent_workflow():
     """Simulate an agent workflow with memory management"""
@@ -144,17 +167,31 @@ def simulate_agent_workflow():
         
         # Add all tool results to the knowledge graph
         tool_ids = []
+        cache_hits = 0
+        cache_avoided_tokens = 0
+
+        # a local token counter for avoided-tokens estimate
+        from token_counter import TokenCounter
+        _demo_token_counter = TokenCounter()
+
         for i, tool_entry in enumerate(trace_data):
-            print(f"Adding tool result {i+1}/{len(trace_data)}...")
-            tool_id = kg_service.add_tool_result(tool_entry)
-            tool_ids.append(tool_id)
-            time.sleep(0.1)  # Small delay to show progress
+            print(f"Processing tool {i+1}/{len(trace_data)}...")
+            res = run_entry_with_cache(kg_service, tool_entry, _demo_token_counter)
+            if res["reused"]:
+                cache_hits += 1
+                cache_avoided_tokens += res["avoided_tokens"]
+            else:
+                tool_ids.append(res["tool_id"])
+            time.sleep(0.05)
         
         print()
         print(colored("=== INITIAL DASHBOARD (before summaries) ===", "cyan"))
         dashboard = kg_service.generate_dashboard()
         print(dashboard)
         
+        # Right before PHASE 2
+        tool_ids = [tr.tool_id for tr in kg_service.get_all_tool_results()]
+
         print()
         print(colored("=== PHASE 2: GENERATING SUMMARIES ===", "cyan", attrs=['bold']))
         print(colored("# NOTE: In the actual agent, this summarization happens in PARALLEL", "yellow"))
@@ -263,6 +300,9 @@ def simulate_agent_workflow():
         print(f"Total tokens: {total_tokens:,}")
         print(f"Summaries generated: {len(summaries)}")
         print(f"Compression groups created: {len(compressed_groups)}")
+
+        print(f"Cache hits (initial pass): {cache_hits}")
+        print(f"Cache avoided tokens (initial): {cache_avoided_tokens:,}")
         
         # Calculate compression ratio
         if summaries:

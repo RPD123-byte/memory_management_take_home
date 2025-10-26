@@ -9,7 +9,7 @@ from models import RelationshipType, ToolResult, ToolSummary
 from token_counter import TokenCounter
 from llm_service import LLMService, Message
 from tool_summary_prompts import TOOL_SUMMARY_PROMPT
-
+import hashlib
 
 class KnowledgeGraphService:
     """Service for managing tool results using a knowledge graph approach"""
@@ -63,28 +63,47 @@ class KnowledgeGraphService:
         """
         self.tool_counter += 1
         tool_id = f"TR-{self.tool_counter}"
-        
-        # Calculate token count for the result
-        result_text = json.dumps(knowledge_entry, indent=2)
+
+        action_type = knowledge_entry.get("action_type", "unknown")
+        action_norm = self._normalize_action(knowledge_entry.get("action", {}) or {})
+        tool_key = self._make_tool_key(action_type, action_norm)
+        resource_ids = self._extract_resource_ids(action_type, action_norm)
+        op_type = self._classify_op(action_type, action_norm)
+
+        to_store = dict(knowledge_entry)
+        to_store.setdefault("action", action_norm)
+        to_store["cache"] = {
+            "tool_key": tool_key,
+            "resource_ids": resource_ids,
+            "op_type": op_type,
+        }
+
+        result_text = json.dumps(to_store, indent=2)
         token_count = self.token_counter.count_tokens(result_text)
-        
-        # Create tool result
+
         tool_result = ToolResult(
             tool_id=tool_id,
-            action_type=knowledge_entry.get("action_type", "unknown"),
-            action=knowledge_entry.get("action", {}),
+            action_type=action_type,
+            action=action_norm,
             result=knowledge_entry.get("result", {}),
             timestamp=knowledge_entry.get("timestamp", datetime.now().isoformat()),
             token_count=token_count,
-            status=knowledge_entry.get("result", {}).get("status", "unknown")
+            status=knowledge_entry.get("result", {}).get("status", "unknown"),
         )
-        
-        # Store in Neo4j
+
         self._store_tool_result(tool_result, result_text)
-        
+
+        # Write-aware housekeeping: update resource last write and purge stale reads
+        if op_type == "write":
+            for rid in resource_ids:
+                self._upsert_resource_last_write(rid, tool_result.timestamp)
+                purged = self._delete_stale_reads_for_resource(rid, tool_result.timestamp)
+                if purged:
+                    print(colored(f"Purged {purged} stale cached reads for {rid}", "yellow"))
+
         print(colored(f"Added tool result {tool_id} with {token_count} tokens", "green"))
         return tool_id
-        
+
     def _store_tool_result(self, tool_result: ToolResult, content: str):
         """Store tool result in Neo4j"""
         # Create tool result node
@@ -487,3 +506,273 @@ class KnowledgeGraphService:
         lines.append(f"Token Usage: {total_tokens:,} / {max_tokens:,} ({usage_percent:.1f}%)")
         
         return "\n".join(lines) 
+
+    def _normalize_action(self, action: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Stable normalization for hashing:
+        - sort keys
+        - sort lists where order doesn't matter (files)
+        - coerce None/empty cwd
+        """
+        a = dict(action or {})
+        if "files" in a and isinstance(a["files"], list):
+            a["files"] = sorted([str(x) for x in a["files"]])
+        if "args" in a and isinstance(a["args"], list):
+            a["args"] = [str(x) for x in a["args"]]
+        if "cwd" in a and a["cwd"] is None:
+            a["cwd"] = ""
+        return a
+
+
+    def _make_tool_key(self, action_type: str, action: Dict[str, Any]) -> str:
+        """
+        Stable fingerprint of (intent + params) used to detect repeated calls.
+        """
+        norm = self._normalize_action(action)
+        norm_json = json.dumps(norm, sort_keys=True, separators=(",", ":"))
+        digest = hashlib.sha256((action_type + "|" + norm_json).encode()).hexdigest()[:16]
+        return f"{action_type}:{digest}"
+
+    def _extract_resource_ids(self, action_type: str, action: Dict[str, Any]) -> List[str]:
+        """
+        Extract one or more resource anchors (file path, ARN, bucket, query, group).
+        """
+        ids: List[str] = []
+        a = action or {}
+
+        # Codebase tools
+        if action_type in {"create_file", "delete_file", "read_file_contents", "run_file"}:
+            fp = a.get("file_path")
+            if fp: ids.append(str(fp))
+        if action_type == "modify_code":
+            files = a.get("files") or []
+            ids.extend([str(p) for p in files if p])
+
+        # CLI (execute_command) heuristics
+        if action_type == "execute_command":
+            cmd = (a.get("command") or "")
+            if "s3://" in cmd:
+                after = cmd.split("s3://", 1)[-1]
+                bucket = after.split()[0]
+                if bucket: ids.append(f"s3://{bucket}")
+            if "--policy-arn" in cmd:
+                for tok in cmd.split():
+                    if tok.startswith("arn:"):
+                        ids.append(tok)
+            if "--group-name" in cmd:
+                tail = cmd.split("--group-name", 1)[-1].strip()
+                if tail.startswith("="): tail = tail[1:].strip()
+                tail = tail.strip("'\"")
+                if tail: ids.append(f"iam:group:{tail}")
+
+        # Searches/queries
+        if action_type == "query_codebase":
+            q = a.get("query")
+            if q: ids.append(f"code_query:{q}")
+        if action_type == "search_documentation":
+            parts = []
+            for k in ("language", "provider_version", "search_method", "query"):
+                v = a.get(k)
+                if v: parts.append(f"{k}={v}")
+            if parts: ids.append("docs:" + "|".join(parts))
+        if action_type == "search_internet":
+            q = a.get("query")
+            if q: ids.append(f"web:{q}")
+
+        # dedup
+        out, seen = [], set()
+        for rid in ids:
+            if rid and rid not in seen:
+                seen.add(rid); out.append(rid)
+        return out
+
+    def _classify_op(self, action_type: str, action: Dict[str, Any]) -> str:
+        """
+        'write' if likely to mutate, else 'read'.
+        """
+        if action_type in {"create_file", "modify_code", "delete_file"}:
+            return "write"
+        if action_type == "execute_command":
+            cmd = (action.get("command") or "").lower()
+            write_markers = [
+                " create-", " put-", " attach-", " update-", " delete-",
+                " remove-", " set-", " cp ", " mv ", " rm ",
+            ]
+            if any(m in f" {cmd} " for m in write_markers):
+                return "write"
+        return "read"
+
+    def _resource_node_id(self, resource_id: str) -> str:
+        return f"resource::{resource_id.replace(' ', '_')}"
+
+    def _upsert_resource_last_write(self, resource_id: str, ts_iso: str) -> None:
+        node_id = self._resource_node_id(resource_id)
+        content = {"last_write_ts": ts_iso}
+        self.neo4j_service.update_node(
+            metadata=node_id,
+            summary=f"Resource {resource_id}",
+            content=json.dumps(content),
+            workflow_id=self.workflow_id,
+        )
+
+    def _get_resource_last_write(self, resource_id: str) -> Optional[str]:
+        node_id = self._resource_node_id(resource_id)
+        node = self.neo4j_service.get_node_by_metadata(self.workflow_id, node_id)
+        if not node:
+            return None
+        try:
+            return json.loads(node.get("content") or "{}").get("last_write_ts")
+        except Exception:
+            return None
+
+    def _delete_stale_reads_for_resource(self, resource_id: str, write_ts_iso: str) -> int:
+        """
+        Delete cached READ episodes (and their summaries) that reference `resource_id`
+        and are OLDER than the given write timestamp.
+        Returns number of deleted episodes.
+        """
+        deleted = 0
+        nodes = self.neo4j_service.get_all_nodes(self.workflow_id)
+
+        # parse write timestamp
+        try:
+            t_write = datetime.fromisoformat(write_ts_iso.replace("Z", "+00:00"))
+        except Exception:
+            # if write ts unparsable, skip purging to be safe
+            return 0
+
+        READ_TYPES = {
+            "read_file_contents", "query_codebase",
+            "search_documentation", "search_internet",
+            "retrieve_integration_methods", "execute_command"
+        }
+
+        for node in nodes:
+            nid = node["id"]
+            if not nid.startswith("tool_result_"):
+                continue
+            try:
+                content = json.loads(node.get("content") or "{}")
+            except Exception:
+                continue
+
+            atype = content.get("action_type", "")
+            status = (content.get("result", {}) or {}).get("status", "").lower()
+            ts = content.get("timestamp") or ""
+            cache = content.get("cache", {}) or {}
+            rids = cache.get("resource_ids") or []
+
+            if atype not in READ_TYPES:           # only purge reads
+                continue
+            if status != "success":
+                continue
+            if resource_id not in rids:
+                continue
+
+            try:
+                t_hit = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except Exception:
+                # if hit ts bad, err on safety: delete
+                t_hit = None
+
+            if t_hit is None or t_hit < t_write:
+                # delete summary node if present
+                tool_id = nid.replace("tool_result_", "")
+                self.neo4j_service.delete_node(self.workflow_id, f"summary_{tool_id}", force=True)
+                # delete the episode node
+                self.neo4j_service.delete_node(self.workflow_id, nid, force=True)
+                deleted += 1
+
+        return deleted
+
+
+    def preflight(self, action_type: str, action: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Check the graph for the most recent SUCCESS result with the same tool_key.
+        If valid, return a lightweight dict the caller can render and SKIP making a new tool call.
+        """
+        tool_key = self._make_tool_key(action_type, action)
+
+        # We haven't added node properties for tool_key yet, so we scan existing nodes (v1).
+        # Later, we can store tool_key as a Node property and query it directly.
+        nodes = self.neo4j_service.get_all_nodes(self.workflow_id)
+        latest = None
+
+        for node in nodes:
+            if not node["id"].startswith("tool_result_"):
+                continue
+
+            try:
+                content = json.loads(node.get("content", "{}"))
+            except Exception:
+                continue
+
+            prior_action_type = content.get("action_type", "")
+            prior_action = content.get("action", {}) or {}
+            prior_status = (content.get("result", {}) or {}).get("status", "").lower()
+            prior_ts = content.get("timestamp") or ""
+
+            # We stored tool_key under content["cache"]["tool_key"] (see add_tool_result change below)
+            prior_cache = content.get("cache", {}) or {}
+            prior_key = prior_cache.get("tool_key")
+
+            if prior_action_type != action_type:
+                continue
+            if prior_status != "success":
+                continue
+            if prior_key != tool_key:
+                continue
+
+            # Keep the latest one
+            if latest is None or (prior_ts and prior_ts > latest.get("timestamp", "")):
+                latest = {
+                    "node_id": node["id"],          # e.g., tool_result_TR-5
+                    "tool_id": node["id"].replace("tool_result_", ""),
+                    "timestamp": prior_ts,
+                }
+
+        if not latest:
+            return None
+
+        # Basic validity: accept any prior SUCCESS with same key.
+        # (You can extend with TTL or write-invalidation later.)
+        if not self._is_valid_cached_result(latest, action_type, action):
+            return None
+
+        # Prefer a summary+salient one-liner if available
+        line = self.retrieve_tool_result_with_salient_data(latest["tool_id"]) \
+               or self.retrieve_tool_result(latest["tool_id"], summary=True) \
+               or f"Reused prior result for {action_type}"
+
+        return {"tool_id": latest["tool_id"], "text": line}
+
+    def _is_valid_cached_result(self, hit: Dict[str, Any], action_type: str, action: Dict[str, Any]) -> bool:
+        """
+        TTL-free validity:
+        Cached SUCCESS is valid iff NO newer WRITE occurred on ANY relevant resource_id.
+        """
+        # parse cached read timestamp
+        try:
+            t_hit = datetime.fromisoformat(hit["timestamp"].replace("Z", "+00:00"))
+        except Exception:
+            return False
+
+        # if we can map resources, enforce write-aware invalidation
+        norm_action = self._normalize_action(action)
+        resource_ids = self._extract_resource_ids(action_type, norm_action)
+        for rid in resource_ids:
+            last_write_ts = self._get_resource_last_write(rid)
+            if last_write_ts:
+                try:
+                    t_write = datetime.fromisoformat(last_write_ts.replace("Z", "+00:00"))
+                    if t_write > t_hit:
+                        return False
+                except Exception:
+                    return False
+
+        # If there are no relevant resource ids 
+        return True
+
+    def render_reused_result(self, cached: Dict[str, Any]) -> str:
+        """Format a reused line for the dashboard / logs."""
+        return f"[REUSED {cached['tool_id']}] {cached['text']} [FROM CACHE]"
